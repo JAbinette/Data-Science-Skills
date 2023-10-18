@@ -1,0 +1,127 @@
+---
+title: "607 Project 1 - Chess Tournament"
+author: "Jen Abinette"
+output: html_document
+date: "2022-09-24"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Overview:
+Import text file with chess tournament results where the information has some structure and create an R Markdown file that generates a .CSV file with the following information for all of the players: Player’s Name, Player’s State, Total Number of Points, Player’s Pre-Rating, and Average Pre Chess Rating of Opponents
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(stringr)
+```
+## Import Data:
+```{r}
+url = 'https://raw.githubusercontent.com/JAbinette/CUNY-607-DataAcquisition/main/tournamentinfo.txt'
+
+file_load <- 
+  as.data.frame(
+                read_fwf(url, 
+                         fwf_cols( player_state = c(4,6),  pre_rating = c(23,26), player_nbr = c(4,6), player_name = c(9,41), total_pts = c(42,44), 
+                             round1 = c(51,52), round2 = c(57,58), round3 =	c(63,64), round4 =	c(69,70), round5 =	c(75,76), round6 =	c(81,82),
+                             round7 =	c(87,88)
+                                  ),
+                        trim_ws = TRUE, skip = 4, skip_empty_rows = TRUE, show_col_types = 'FALSE'
+                        )
+               )
+head(file_load)
+```
+# Create separate data frames splitting player information based on if the data is on the same line
+```{r}
+# Create new variable that indicates if the player_nbr field includes numbers or not
+file_load$logic_nbr <- ifelse ( grepl("[^0-9]+", file_load$player_nbr), 0, 1)
+# Subset based on new variable excluding player_state and pre_rating fields as those variables have the correct info on a different row than the others 
+file_1 <- subset(file_load, logic_nbr==1, select=player_nbr:round7)
+head(file_1)
+```
+# Clean up Data
+```{r}
+# Convert data type to numeric or integer as applicable
+file_1$player_nbr <- as.integer(file_1$player_nbr)
+file_1$total_pts <- as.numeric(file_1$total_pts)
+file_1$round1 <- as.integer(file_1$round1)
+file_1$round2 <- as.integer(file_1$round2)
+file_1$round3 <- as.integer(file_1$round3)
+file_1$round4 <- as.integer(file_1$round4)
+file_1$round5 <- as.integer(file_1$round5)
+file_1$round6 <- as.integer(file_1$round6)
+file_1$round7 <- as.integer(file_1$round7)
+# Remove trailing | character
+file_1$player_name <- gsub('\\|', '', file_1$player_name)
+# Remove trailing whitespace
+file_1$player_name <- trimws(file_1$player_name, which = c("right"), whitespace = "[ \t\r\n]")
+head(file_1)
+```
+# Create variable indicating how many rounds were played
+```{r}
+# Convert NA to zero
+file_1[is.na(file_1)] <- 0
+# Create variable of how many rounds played
+file_1$nbr_games <- 
+  ifelse ( grepl('^0', file_1$round1), 0, 1) + ifelse ( grepl('^0', file_1$round2), 0, 1) + ifelse ( grepl('^0', file_1$round3), 0, 1) +
+  ifelse ( grepl('^0', file_1$round4), 0, 1) + ifelse ( grepl('^0', file_1$round5), 0, 1) + ifelse ( grepl('^0', file_1$round6), 0, 1) + 
+  ifelse ( grepl('^0', file_1$round7), 0, 1)
+
+tail(file_1)
+```
+# Create data frame with State and pre-rating
+```{r}
+# Create new variable that indicates if the player_state field includes letters or not
+file_load$logic_state <- ifelse ( grepl("[^A-Z]+", file_load$player_state), 0, 1)
+
+# Subset based on new variable including remaining fields player_state and pre_rating
+file_2 <- subset(file_load, logic_state==1, select=player_state:pre_rating)
+#Create player nbr field
+file_2$player_nbr_2 <- as.integer(1:64)
+file_2$pre_rating <- as.integer(file_2$pre_rating)
+head(file_2)
+```
+# Retrieve the pre-rating scores for each round's opponent and remove extraneous columns
+```{r}
+r1 <- subset ( merge( file_1, file_2, by.x = "round1", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating, nbr_games))
+names(r1)[names(r1)=="pre_rating"] <- "rate1"
+
+r2 <- subset ( merge( file_1, file_2, by.x = "round2", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r2)[names(r2)=="pre_rating"] <- "rate2"
+r3 <- subset ( merge( file_1, file_2, by.x = "round3", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r3)[names(r3)=="pre_rating"] <- "rate3"
+r4 <- subset ( merge( file_1, file_2, by.x = "round4", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r4)[names(r4)=="pre_rating"] <- "rate4"
+r5 <- subset ( merge( file_1, file_2, by.x = "round5", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r5)[names(r5)=="pre_rating"] <- "rate5"
+r6 <- subset ( merge( file_1, file_2, by.x = "round6", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r6)[names(r6)=="pre_rating"] <- "rate6"
+r7 <- subset ( merge( file_1, file_2, by.x = "round7", by.y = "player_nbr_2", all.x = TRUE), select=c(player_nbr,pre_rating))
+names(r7)[names(r7)=="pre_rating"] <- "rate7"
+
+head(r1)
+```
+
+# Merge round1 through round7 data frames to find the average opponents’ ratings
+```{r}
+chess_avg <- merge( merge( merge( merge( merge( merge(r1, r2), r3), r4), r5), r6), r7)
+chess_avg$avg <- 
+  round( (chess_avg$rate1 + chess_avg$rate2 + chess_avg$rate3 + chess_avg$rate4 + chess_avg$rate5 + chess_avg$rate6 + chess_avg$rate7) 
+         / chess_avg$nbr_games
+        )
+chess_avg <- subset( chess_avg, select = c(player_nbr, avg) )
+head(chess_avg)
+```
+# Create final data set by merging tables with necessary data and removing unneeded columns
+```{r}
+file_1_final <- subset(file_1, select = c(player_nbr, player_name, total_pts))
+chess_tourn <- merge( merge(file_1_final, file_2, by.x = "player_nbr", by.y = "player_nbr_2"), chess_avg)
+chess_tourn <- subset(chess_tourn, select = c(player_name, player_state, total_pts, pre_rating, avg) )
+head(chess_tourn)
+```
+# Write to CSV file
+```{r}
+write.csv(chess_tourn,"C:\\Users\\jenvo\\Documents\\CUNY MS\\607 - Data Acquisition\\W5\\Project1-Chess Tournament Output.csv", row.names = FALSE, quote=FALSE)
+```
+

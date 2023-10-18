@@ -1,0 +1,85 @@
+---
+title: "607 Wk 6 Assignment"
+output: html_document
+date: "2022-09-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+```
+## Load CSV file saved in Github
+```{r}
+url = 'https://raw.githubusercontent.com/JAbinette/CUNY-607-DataAcquisition/main/Numbersense.csv'
+d.load <- read.csv(url, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+str(d.load)
+```
+## Transform Airline Variable
+```{r}
+# Row with Delayed Values are missing Airline name
+d.load$X[2] <- "ALASKA"
+d.load$X[5] <- "AMWEST"
+# Trim white space from Airline values
+d.load$X <- trimws(d.load$X, which = c("right"), whitespace = "[ \t\r\n]")
+# Rename X to Airline
+names(d.load)[names(d.load)=="X"] <- "Airline"
+head(d.load)
+```
+## Transform Flight Status Variable
+```{r}
+# Rename X.1 to Status
+names(d.load)[names(d.load)=="X.1"] <- "Status"
+# Remove empty row
+d.load <- d.load %>% filter(Airline=="ALASKA"|Airline=="AMWEST")
+head(d.load)
+```
+
+# Create new dataframe (flights) transforming the 5 destinations into 1 variable called Destination
+```{r}
+flights <- pivot_longer(d.load, cols = 3:7, names_to ="Destination", values_to = "Frequency")
+head(flights)
+```
+# Reformat Destination values replacing periods with spaces e.g., Los.Angeles to Los Angeles
+```{r}
+flights$Destination <- gsub("[/.]", " ", flights$Destination)
+head(flights)
+```
+# Analyze Arrival Delays by Airline
+```{r}
+# Add variable for Sum of Frequency by Airline 
+agg_flights <- flights %>% 
+  group_by(Airline) %>% 
+  mutate(Sum_Airline = sum(Frequency))
+# Convert tibble to dataframe, replacing previous flights dataframe
+flights <- agg_flights %>% as.data.frame()
+# Create dataframe showing percent of ALASKA and AMWEST on time and delayed flights
+flights_summ <- flights %>% 
+  group_by(Airline,Status,Sum_Airline) %>% 
+  summarize(Frequency = sum(Frequency))
+flights_summ <- as.data.frame(flights_summ)
+flights_summ$Percent_Status <- (flights_summ$Frequency/flights_summ$Sum_Airline)*100
+head(flights_summ)
+```
+## As we can see above, overall AMWEST airline has a greater proportion of their flights landing on time at just over 89% with ALASKA airline following fairly close behind at under 87%.  Therefore, to avoid delays flying AMWEST would be preferred according to this data.  However, this summary does not identify if the destination location has any affect, so we may want to explore further before deciding on AMWEST for all our travel needs.
+
+## Analyze Arrival Delays by Airline and Destination
+```{r}
+# Add variable for Sum of Frequency by Airline and Destination
+agg_flights2 <- flights %>% 
+  group_by(Airline,Destination) %>% 
+  mutate(Sum_Dest = sum(Frequency))
+# Convert tibble to dataframe
+flights_dest <- agg_flights2 %>%
+  as.data.frame()
+
+# Create dataframe showing percent of ALASKA and AMWEST on time and delayed flights
+flights_summ2 <- flights_dest %>% 
+  group_by(Airline,Destination,Status,Sum_Dest) %>% 
+  summarize(Frequency = sum(Frequency)) 
+flights_summ2 <- as.data.frame(subset(flights_summ2, Status=="delayed"))
+flights_summ2$Percent_Status <- round((flights_summ2$Frequency/flights_summ2$Sum_Dest)*100,0)
+arrange(flights_summ2,Destination,Status)
+```
+## Now it is clearer to see that flying AMWEST regardless of destination will not give us the greatest chance of arriving on time and in fact ALASKA airlines has a lower percentage of delayed flights for each of the destinations in this dataset and would be the wiser choice.
+
